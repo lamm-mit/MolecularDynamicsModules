@@ -274,6 +274,7 @@ NVE energy conservation, and progressive cross-plane bond breaking under load.
 - **Interactive eigenmode animation**: pick a wavevector and branch and watch the
   atoms oscillate in that phonon, with the dispersion plotted and your $k$ marked.
 
+![alt text](assets/crack-app.png)
 ---
 
 ## Files
