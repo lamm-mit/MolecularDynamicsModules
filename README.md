@@ -195,19 +195,20 @@ You control the optimizer, learning rate, epochs, number of datapoints, hidden
 width, and regularization. The diagnostics plot the training **loss vs. epoch**, the
 **trained-vs-target $V(r)$**, and a **force-parity** scatter.
 
+![alt text](assets/MLIP_training.png)
 ### Live 3D simulator
 
 The final cell embeds a standalone HTML/JavaScript panel (`<iframe srcdoc=…>`) that
 runs the MD loop in the browser:
 
-- **FCC lattice** — the stable close-packed ground state (a simple-cubic lattice has
-  no shear stiffness and "melts" even at very low $T$); the cell size auto-fits to
+- **FCC lattice** — the stable close-packed ground state is used as a starting configuration; the cell size auto-fits to
   the potential's zero-pressure spacing.
 - Potentials: **Morse**, **Custom** (your drawn/target curve), or the trained
   **MLIP**.
 - **Periodic** or **reflecting-wall** boundary conditions, three thermostats, live
   temperature/energy plots, and drag-to-rotate 3D rendering.
 
+![alt text](assets/MLIP_dynamics.png)
 ### Requirements
 
 `numpy`, `scipy`, `matplotlib`, `ipywidgets`, `ipycanvas`, and `torch` (for the
