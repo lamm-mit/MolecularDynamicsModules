@@ -241,9 +241,9 @@ If you use this code in teaching or research, please cite:
 ```bibtex
 @software{buehler2026md2d,
   author = {Buehler, Markus J.},
-  title  = {2D Molecular Dynamics: An Interactive Teaching Tool},
+  title  = {Molecular Dynamics: A Set of Interactive Teaching Tools},
   year   = {2026},
   url    = {https://github.com/lamm-mit/MolecularDynamicsModules},
-  note   = {Interactive simulator: standalone HTML/JavaScript page with companion Jupyter notebook}
+  note   = {Interactive simulator: standalone HTML/JavaScript page with companion Jupyter notebook, Morse, MLIP and other force fields}
 }
 ```
