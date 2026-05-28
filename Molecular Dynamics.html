@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Live 2D MD — Morse and EAM</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+         margin: 0; padding: 14px; background: #f3f3f5; color: #222; }
+  h1 { margin: 0 0 8px 0; font-size: 18px; }
+  .by { color: #888; font-size: 12px; margin-bottom: 12px; }
+  #readout { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px;
+             padding: 8px 12px; background: white; border-radius: 6px;
+             box-shadow: 0 1px 3px rgba(0,0,0,0.07); margin-bottom: 10px; }
+  #controls { background: white; padding: 10px 14px; border-radius: 6px;
+              box-shadow: 0 1px 3px rgba(0,0,0,0.07); margin-bottom: 10px; }
+  .button-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .button-row button { padding: 8px 14px; font-size: 14px; border: none; border-radius: 4px;
+                       cursor: pointer; color: white; font-weight: 600; }
+  #start { background: #28a745; }
+  #stop  { background: #dc3545; }
+  #reset { background: #ffc107; color: #333; }
+  #replay{ background: #17a2b8; }
+  #start:hover, #stop:hover, #reset:hover, #replay:hover { filter: brightness(0.92); }
+  #statusText { font-style: italic; color: #666; margin-left: 10px; font-size: 13px; }
+  fieldset { border: 1px solid #e1e1e6; border-radius: 4px; padding: 4px 12px 6px 12px;
+             margin: 0 0 6px 0; }
+  fieldset legend { font-weight: 600; padding: 0 6px; font-size: 11px; color: #555;
+                    text-transform: uppercase; letter-spacing: 0.5px; }
+  .slider-row { display: inline-flex; align-items: center; gap: 6px;
+                margin: 3px 14px 3px 0; font-size: 12px; }
+  .slider-row label { min-width: 75px; color: #444; }
+  .slider-row input[type="range"] { width: 110px; }
+  .slider-row .value { min-width: 46px; font-family: ui-monospace, Menlo, monospace;
+                       color: #333; text-align: right; }
+  .slider-row select { font-size: 12px; padding: 2px 6px; min-width: 110px; }
+  #viewport { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
+  #atomCanvas { background: white; border-radius: 6px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.07); }
+  #plots { display: flex; flex-direction: column; gap: 6px; }
+  #plots canvas { background: white; border-radius: 6px;
+                  box-shadow: 0 1px 3px rgba(0,0,0,0.07); }
+</style>
+</head>
+<body>
+
+<h1>Live 2D Molecular Dynamics &mdash; Morse and EAM</h1>
+<div class="by">Markus J. Buehler, MIT &mdash; click <b>&#9654; Start</b> to begin. Edit parameters live; press <b>&#10227; Reset</b> if you change nx, ny, a_lat, BC, T_init, or seed.</div>
+
+<div id="readout">click &#9654; Start to begin</div>
+
+<div id="controls">
+
+  <div class="button-row">
+    <button id="start">&#9654; Start</button>
+    <button id="stop">&#9632; Stop</button>
+    <button id="reset">&#10227; Reset</button>
+    <button id="replay">&#8635; Replay</button>
+    <button id="clear_traces" style="background:#6c757d; padding:8px 12px;">&#10005; Traces</button>
+    <span id="statusText">ready</span>
+    <span style="color:#888; font-size:12px; margin-left:8px;">tip: click an atom to trace it</span>
+  </div>
+
+  <fieldset>
+    <legend>Potential &amp; display (live)</legend>
+    <div class="slider-row">
+      <label>potential</label>
+      <select id="potential"><option>Morse</option><option>EAM</option></select>
+    </div>
+    <div class="slider-row">
+      <label>colour by</label>
+      <select id="colorBy">
+        <option value="KE">KE (kinetic)</option>
+        <option value="PE">PE (potential)</option>
+        <option value="speed">|v| (speed)</option>
+        <option value="stress">virial (stress)</option>
+      </select>
+    </div>
+    <div class="slider-row"><label>steps/frame</label><input type="range" id="spf" min="1" max="50" step="1" value="8"><span class="value" data-fmt="0">8</span></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>System (changes apply on Reset)</legend>
+    <div class="slider-row"><label>nx</label><input type="range" id="nx" min="4" max="14" step="1" value="8"><span class="value" data-fmt="0">8</span></div>
+    <div class="slider-row"><label>ny</label><input type="range" id="ny" min="4" max="14" step="1" value="8"><span class="value" data-fmt="0">8</span></div>
+    <div class="slider-row"><label>a_lat</label><input type="range" id="a_lat" min="0.95" max="1.40" step="0.01" value="1.05"><span class="value" data-fmt="2">1.05</span></div>
+    <div class="slider-row"><label>bc</label><select id="bc"><option>periodic</option><option>walls</option></select></div>
+    <div class="slider-row"><label>T_init</label><input type="range" id="T_init" min="0" max="0.5" step="0.005" value="0.03"><span class="value" data-fmt="3">0.030</span></div>
+    <div class="slider-row"><label>seed</label><input type="range" id="seed" min="0" max="99" step="1" value="0"><span class="value" data-fmt="0">0</span></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Morse parameters (live)</legend>
+    <div class="slider-row"><label>D_e</label><input type="range" id="De" min="0.1" max="3.0" step="0.05" value="1.0"><span class="value" data-fmt="2">1.00</span></div>
+    <div class="slider-row"><label>a (Morse)</label><input type="range" id="aMorse" min="1.0" max="15.0" step="0.25" value="5.0"><span class="value" data-fmt="2">5.00</span></div>
+    <div class="slider-row"><label>r_e</label><input type="range" id="re" min="0.7" max="1.3" step="0.02" value="1.0"><span class="value" data-fmt="2">1.00</span></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>EAM parameters (live)</legend>
+    <div class="slider-row"><label>A</label><input type="range" id="A" min="0.2" max="10.0" step="0.1" value="2.0"><span class="value" data-fmt="2">2.00</span></div>
+    <div class="slider-row"><label>alpha</label><input type="range" id="alpha" min="1.0" max="8.0" step="0.1" value="3.0"><span class="value" data-fmt="2">3.00</span></div>
+    <div class="slider-row"><label>B</label><input type="range" id="B" min="0.1" max="3.0" step="0.05" value="0.5"><span class="value" data-fmt="2">0.50</span></div>
+    <div class="slider-row"><label>beta</label><input type="range" id="beta" min="1.0" max="8.0" step="0.1" value="3.0"><span class="value" data-fmt="2">3.00</span></div>
+    <div class="slider-row"><label>C</label><input type="range" id="C" min="0.1" max="5.0" step="0.05" value="1.5"><span class="value" data-fmt="2">1.50</span></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Thermal &amp; integration (live)</legend>
+    <div class="slider-row"><label>thermostat</label><select id="thermostat"><option>none</option><option>rescale</option><option>berendsen</option></select></div>
+    <div class="slider-row"><label>T_target</label><input type="range" id="T_target" min="0.001" max="0.5" step="0.005" value="0.05"><span class="value" data-fmt="3">0.050</span></div>
+    <div class="slider-row"><label>tau_T (Ber.)</label><input type="range" id="tau_T" min="0.05" max="5.0" step="0.05" value="1.0"><span class="value" data-fmt="2">1.00</span></div>
+    <div class="slider-row"><label>dt</label><input type="range" id="dt" min="0.001" max="0.02" step="0.001" value="0.005"><span class="value" data-fmt="3">0.005</span></div>
+    <div class="slider-row"><label>box scale</label><input type="range" id="box_scale" min="0.70" max="1.60" step="0.02" value="1.00"><span class="value" data-fmt="2">1.00</span></div>
+  </fieldset>
+
+</div>
+
+<div id="viewport">
+  <canvas id="atomCanvas" width="640" height="640"></canvas>
+  <div id="plots">
+    <canvas id="tempPlot"     width="380" height="118"></canvas>
+    <canvas id="energyPlot"   width="380" height="118"></canvas>
+    <canvas id="pressurePlot" width="380" height="118"></canvas>
+    <canvas id="msdPlot"      width="380" height="118"></canvas>
+    <canvas id="rdfPlot"      width="380" height="148"></canvas>
+  </div>
+</div>
+
+<script>
+// ==========================================================================
+// Live 2D MD in pure JS — physics + rendering, no external deps
+// ==========================================================================
+
+// ---------- helpers ----------
+function $(id) { return document.getElementById(id); }
+
+function setupHiDPI(canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.width, h = canvas.height;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  canvas._logicalW = w;
+  canvas._logicalH = h;
+  return ctx;
+}
+
+// Mulberry32 deterministic RNG (so 'seed' is reproducible)
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = a;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function gaussian(rng) {
+  // Box-Muller
+  const u = 1 - rng();
+  const v = rng();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+// ---------- parameter reading ----------
+function readParams() {
+  return {
+    potential: $('potential').value,
+    colorBy:   $('colorBy').value,
+    spf:       parseInt($('spf').value),
+    nx:        parseInt($('nx').value),
+    ny:        parseInt($('ny').value),
+    a_lat:     parseFloat($('a_lat').value),
+    bc:        $('bc').value,
+    T_init:    parseFloat($('T_init').value),
+    seed:      parseInt($('seed').value),
+    De:        parseFloat($('De').value),
+    aMorse:    parseFloat($('aMorse').value),
+    re:        parseFloat($('re').value),
+    A:         parseFloat($('A').value),
+    alpha:     parseFloat($('alpha').value),
+    B:         parseFloat($('B').value),
+    beta:      parseFloat($('beta').value),
+    C:         parseFloat($('C').value),
+    thermostat:$('thermostat').value,
+    T_target:  parseFloat($('T_target').value),
+    tau_T:     parseFloat($('tau_T').value),
+    dt:        parseFloat($('dt').value),
+    box_scale: parseFloat($('box_scale').value)
+  };
+}
+
+// Live-update the value spans next to every slider
+document.querySelectorAll('input[type="range"]').forEach(input => {
+  const span = input.parentElement.querySelector('.value');
+  if (!span) return;
+  const fmt = parseInt(span.dataset.fmt || '2');
+  const update = () => {
+    const v = parseFloat(input.value);
+    span.textContent = v.toFixed(fmt);
+  };
+  input.addEventListener('input', update);
+  update();
+});
+
+// ---------- initial configuration ----------
+function makeLattice(nx, ny, a_lat) {
+  const N = nx * ny;
+  const pos = new Float64Array(2 * N);
+  const Lx = nx * a_lat;
+  const Ly = ny * a_lat * Math.sqrt(3) / 2;
+  let k = 0;
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) {
+      let x = i * a_lat;
+      const y = j * a_lat * Math.sqrt(3) / 2;
+      if (j % 2 === 1) x += a_lat / 2;
+      pos[2 * k] = x;
+      pos[2 * k + 1] = y;
+      k++;
+    }
+  }
+  return { pos: pos, Lbox: [Lx, Ly], N: N };
+}
+
+function initVelocities(N, T, mass, rng) {
+  const v = new Float64Array(2 * N);
+  let cx = 0, cy = 0;
+  for (let i = 0; i < N; i++) {
+    v[2 * i]     = gaussian(rng) * Math.sqrt(T / mass);
+    v[2 * i + 1] = gaussian(rng) * Math.sqrt(T / mass);
+    cx += v[2 * i];
+    cy += v[2 * i + 1];
+  }
+  cx /= N; cy /= N;
+  for (let i = 0; i < N; i++) {
+    v[2 * i]     -= cx;
+    v[2 * i + 1] -= cy;
+  }
+  let KE = 0;
+  for (let i = 0; i < N; i++) {
+    KE += v[2 * i] * v[2 * i] + v[2 * i + 1] * v[2 * i + 1];
+  }
+  KE *= 0.5 * mass;
+  const Tactual = KE / N;       // 2D, kB=1
+  if (Tactual > 0 && T > 0) {
+    const s = Math.sqrt(T / Tactual);
+    for (let i = 0; i < 2 * N; i++) v[i] *= s;
+  }
+  return v;
+}
+
+// ---------- forces ----------
+function computeForcesMorse(state, p) {
+  const { N, pos, Lbox } = state;
+  const { De, aMorse: a, re, bc } = p;
+  const Lx = Lbox[0], Ly = Lbox[1];
+  const F  = new Float64Array(2 * N);
+  const pe = new Float64Array(N);
+  const vir = new Float64Array(N);
+  for (let i = 0; i < N; i++) {
+    const xi = pos[2 * i], yi = pos[2 * i + 1];
+    for (let j = 0; j < N; j++) {
+      if (i === j) continue;
+      let dx = xi - pos[2 * j];
+      let dy = yi - pos[2 * j + 1];
+      if (bc === 'periodic') {
+        dx -= Lx * Math.round(dx / Lx);
+        dy -= Ly * Math.round(dy / Ly);
+      }
+      const r2 = dx * dx + dy * dy;
+      if (r2 < 1e-20) continue;
+      const r = Math.sqrt(r2);
+      const e = Math.exp(-a * (r - re));
+      const Vpair = De * (1 - e) * (1 - e);
+      const dVdr  = 2 * a * De * (1 - e) * e;
+      const factor = -dVdr / r;
+      const fx = factor * dx;
+      const fy = factor * dy;
+      F[2 * i]     += fx;
+      F[2 * i + 1] += fy;
+      pe[i]  += 0.5 * Vpair;
+      vir[i] += 0.5 * (dx * fx + dy * fy);
+    }
+  }
+  return { F, pe, vir };
+}
+
+function computeForcesEAM(state, p) {
+  const { N, pos, Lbox } = state;
+  const { A, alpha, B, beta, C, bc } = p;
+  const Lx = Lbox[0], Ly = Lbox[1];
+
+  // First pass: rho_i
+  const rho = new Float64Array(N);
+  for (let i = 0; i < N; i++) {
+    const xi = pos[2 * i], yi = pos[2 * i + 1];
+    for (let j = 0; j < N; j++) {
+      if (i === j) continue;
+      let dx = xi - pos[2 * j];
+      let dy = yi - pos[2 * j + 1];
+      if (bc === 'periodic') {
+        dx -= Lx * Math.round(dx / Lx);
+        dy -= Ly * Math.round(dy / Ly);
+      }
+      const r = Math.sqrt(dx * dx + dy * dy);
+      if (r < 1e-10) continue;
+      rho[i] += B * Math.exp(-beta * r);
+    }
+  }
+  const Fembed = new Float64Array(N);
+  const Fprime = new Float64Array(N);
+  for (let i = 0; i < N; i++) {
+    const rs = Math.max(rho[i], 1e-12);
+    Fembed[i] = -C * Math.sqrt(rs);
+    Fprime[i] = -C / (2 * Math.sqrt(rs));
+  }
+
+  // Second pass: pairwise forces
+  const F   = new Float64Array(2 * N);
+  const pe  = new Float64Array(N);
+  const vir = new Float64Array(N);
+  for (let i = 0; i < N; i++) {
+    pe[i] = Fembed[i];
+    const xi = pos[2 * i], yi = pos[2 * i + 1];
+    for (let j = 0; j < N; j++) {
+      if (i === j) continue;
+      let dx = xi - pos[2 * j];
+      let dy = yi - pos[2 * j + 1];
+      if (bc === 'periodic') {
+        dx -= Lx * Math.round(dx / Lx);
+        dy -= Ly * Math.round(dy / Ly);
+      }
+      const r2 = dx * dx + dy * dy;
+      if (r2 < 1e-20) continue;
+      const r = Math.sqrt(r2);
+      const expA = Math.exp(-alpha * r);
+      const expB = Math.exp(-beta * r);
+      const phi    =  A * expA;
+      const dphi   = -alpha * A * expA;
+      const drho   = -beta  * B * expB;
+      const combined = dphi + (Fprime[i] + Fprime[j]) * drho;
+      const factor = -combined / r;
+      const fx = factor * dx;
+      const fy = factor * dy;
+      F[2 * i]     += fx;
+      F[2 * i + 1] += fy;
+      pe[i]  += 0.5 * phi;
+      vir[i] += 0.5 * (dx * fx + dy * fy);
+    }
+  }
+  return { F, pe, vir };
+}
+
+// ---------- velocity Verlet step ----------
+function step(state, p) {
+  const N = state.N;
+  const pos = state.pos, vel = state.vel, F = state.F;
+  const unwrapped = state.unwrappedPos;
+  const Lbox = state.Lbox, dt = p.dt, mass = state.mass;
+
+  // 1st half-kick + drift  (track unwrapped trajectory in parallel with pos)
+  for (let i = 0; i < 2 * N; i++) {
+    vel[i] += 0.5 * dt * F[i] / mass;
+    const move = dt * vel[i];
+    pos[i] += move;
+    unwrapped[i] += move;
+  }
+
+  // boundary condition
+  if (p.bc === 'periodic') {
+    // wrap pos only; unwrapped accumulates without wrap so MSD measures
+    // true net displacement even after atoms cross periodic boundaries.
+    const Lx = Lbox[0], Ly = Lbox[1];
+    for (let i = 0; i < N; i++) {
+      pos[2 * i]     = pos[2 * i]     - Lx * Math.floor(pos[2 * i]     / Lx);
+      pos[2 * i + 1] = pos[2 * i + 1] - Ly * Math.floor(pos[2 * i + 1] / Ly);
+    }
+  } else { // walls — elastic reflection (atom physically bounces; sync unwrapped to pos)
+    const Lx = Lbox[0], Ly = Lbox[1];
+    for (let i = 0; i < N; i++) {
+      if (pos[2 * i] < 0)      { pos[2 * i]     = -pos[2 * i];           vel[2 * i]     = -vel[2 * i];     unwrapped[2 * i]     = pos[2 * i]; }
+      if (pos[2 * i] > Lx)     { pos[2 * i]     = 2 * Lx - pos[2 * i];   vel[2 * i]     = -vel[2 * i];     unwrapped[2 * i]     = pos[2 * i]; }
+      if (pos[2 * i + 1] < 0)  { pos[2 * i + 1] = -pos[2 * i + 1];       vel[2 * i + 1] = -vel[2 * i + 1]; unwrapped[2 * i + 1] = pos[2 * i + 1]; }
+      if (pos[2 * i + 1] > Ly) { pos[2 * i + 1] = 2 * Ly - pos[2 * i + 1]; vel[2 * i + 1] = -vel[2 * i + 1]; unwrapped[2 * i + 1] = pos[2 * i + 1]; }
+    }
+  }
+
+  // new forces
+  const r = (p.potential === 'Morse') ? computeForcesMorse(state, p)
+                                      : computeForcesEAM  (state, p);
+  for (let i = 0; i < 2 * N; i++) state.F[i] = r.F[i];
+  state.pe_per = r.pe;
+  state.vir_per = r.vir;
+
+  // 2nd half-kick
+  for (let i = 0; i < 2 * N; i++) vel[i] += 0.5 * dt * state.F[i] / mass;
+
+  // thermostat
+  if (p.thermostat !== 'none') {
+    let KE = 0;
+    for (let i = 0; i < N; i++) {
+      KE += vel[2 * i] * vel[2 * i] + vel[2 * i + 1] * vel[2 * i + 1];
+    }
+    KE *= 0.5 * mass;
+    const Tcur = Math.max(KE / N, 1e-12);
+    state._rescaleCount = (state._rescaleCount || 0) + 1;
+    if (p.thermostat === 'rescale' && state._rescaleCount % 50 === 0) {
+      const s = Math.sqrt(p.T_target / Tcur);
+      for (let i = 0; i < 2 * N; i++) vel[i] *= s;
+    } else if (p.thermostat === 'berendsen') {
+      const lam = Math.sqrt(Math.max(0, 1 + (dt / p.tau_T) * (p.T_target / Tcur - 1)));
+      for (let i = 0; i < 2 * N; i++) vel[i] *= lam;
+    }
+  }
+
+  state.step++;
+  state.time += dt;
+}
+
+// ---------- snapshot ----------
+function snapshot(state) {
+  const N = state.N;
+  let KE = 0;
+  for (let i = 0; i < N; i++) {
+    KE += state.vel[2 * i] * state.vel[2 * i] + state.vel[2 * i + 1] * state.vel[2 * i + 1];
+  }
+  KE *= 0.5 * state.mass;
+  let PE = 0, virSum = 0;
+  for (let i = 0; i < N; i++) {
+    PE += state.pe_per[i];
+    virSum += state.vir_per[i];
+  }
+  const Vbox = state.Lbox[0] * state.Lbox[1];
+  return {
+    N: N,
+    pos: state.pos.slice(),
+    vel: state.vel.slice(),
+    pe_per: state.pe_per.slice(),
+    vir_per: state.vir_per.slice(),
+    T: KE / N, KE: KE, PE: PE, E: KE + PE,
+    P: (2 * KE + virSum) / (2 * Vbox),
+    time: state.time, step: state.step,
+    Lbox: state.Lbox.slice()
+  };
+}
+
+// ---------- colormaps (256-point polynomial-ish anchors) ----------
+function mkLerp(anchors) {
+  return function (t) {
+    t = Math.max(0, Math.min(1, t));
+    const idx = t * (anchors.length - 1);
+    const i0 = Math.floor(idx);
+    const i1 = Math.min(i0 + 1, anchors.length - 1);
+    const f = idx - i0;
+    const r = anchors[i0][0] + f * (anchors[i1][0] - anchors[i0][0]);
+    const g = anchors[i0][1] + f * (anchors[i1][1] - anchors[i0][1]);
+    const b = anchors[i0][2] + f * (anchors[i1][2] - anchors[i0][2]);
+    return `rgb(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)})`;
+  };
+}
+const cmaps = {
+  KE:     mkLerp([[0.267,0.005,0.329],[0.283,0.131,0.449],[0.254,0.265,0.530],[0.207,0.372,0.553],[0.164,0.471,0.558],[0.128,0.567,0.551],[0.135,0.659,0.518],[0.267,0.749,0.441],[0.478,0.821,0.318],[0.741,0.873,0.150],[0.993,0.906,0.144]]),
+  speed:  mkLerp([[0.000,0.135,0.305],[0.000,0.221,0.443],[0.082,0.318,0.494],[0.231,0.394,0.510],[0.353,0.474,0.514],[0.476,0.557,0.514],[0.612,0.642,0.508],[0.757,0.731,0.486],[0.911,0.825,0.439],[0.996,0.929,0.354]]),
+  PE:     mkLerp([[0.050,0.029,0.527],[0.295,0.011,0.638],[0.487,0.011,0.658],[0.667,0.117,0.582],[0.821,0.262,0.439],[0.929,0.412,0.291],[0.985,0.578,0.137],[0.987,0.749,0.024],[0.940,0.975,0.131]]),
+  stress: mkLerp([[0.230,0.299,0.754],[0.604,0.788,0.929],[0.866,0.866,0.866],[0.949,0.604,0.519],[0.706,0.016,0.150]]),
+};
+const cmapLabels = { KE: 'KE', PE: 'PE', speed: '|v|', stress: 'virial' };
+
+// ---------- per-atom field selector ----------
+function fieldValues(snap, colorBy) {
+  const N = snap.N;
+  const v = new Float64Array(N);
+  if (colorBy === 'KE') {
+    for (let i = 0; i < N; i++) v[i] = 0.5 * (snap.vel[2*i]*snap.vel[2*i] + snap.vel[2*i+1]*snap.vel[2*i+1]);
+  } else if (colorBy === 'speed') {
+    for (let i = 0; i < N; i++) v[i] = Math.sqrt(snap.vel[2*i]*snap.vel[2*i] + snap.vel[2*i+1]*snap.vel[2*i+1]);
+  } else if (colorBy === 'PE') {
+    for (let i = 0; i < N; i++) v[i] = snap.pe_per[i];
+  } else if (colorBy === 'stress') {
+    for (let i = 0; i < N; i++) v[i] = snap.vir_per[i];
+  }
+  return v;
+}
+
+// ---------- canvas drawing ----------
+const atomCtx     = setupHiDPI($('atomCanvas'));
+const tempCtx     = setupHiDPI($('tempPlot'));
+const energyCtx   = setupHiDPI($('energyPlot'));
+const pressureCtx = setupHiDPI($('pressurePlot'));
+const msdCtx      = setupHiDPI($('msdPlot'));
+const rdfCtx      = setupHiDPI($('rdfPlot'));
+
+function drawAtoms(snap, colorBy) {
+  const canvas = $('atomCanvas');
+  const W = canvas._logicalW, H = canvas._logicalH;
+  atomCtx.clearRect(0, 0, W, H);
+
+  const Lx = snap.Lbox[0], Ly = snap.Lbox[1];
+  const cbarWidth = 20;
+  const t = atomCanvasTransform(snap.Lbox);
+  const { offX, offY, scale } = t;
+
+  // box border
+  atomCtx.strokeStyle = '#bbb';
+  atomCtx.lineWidth = 1;
+  atomCtx.strokeRect(offX, offY, scale * Lx, scale * Ly);
+
+  // trails (drawn first so atoms sit on top)
+  for (const [atomIdx, trail] of state.trails) {
+    if (trail.length < 2) continue;
+    const cidx = state.trackColorIdx.get(atomIdx) || 0;
+    const colour = TRACK_COLORS[cidx % TRACK_COLORS.length];
+    atomCtx.strokeStyle = colour;
+    atomCtx.lineWidth = 1.4;
+    atomCtx.beginPath();
+    let started = false;
+    for (let k = 0; k < trail.length; k++) {
+      const px = trail[k][0], py = trail[k][1];
+      const xPix = offX + px * scale;
+      const yPix = offY + (Ly - py) * scale;
+      // detect periodic-image jump between successive trail points -> break the line
+      if (started && k > 0) {
+        const dx = px - trail[k - 1][0];
+        const dy = py - trail[k - 1][1];
+        if (Math.abs(dx) > Lx / 2 || Math.abs(dy) > Ly / 2) {
+          atomCtx.stroke();
+          atomCtx.beginPath();
+          atomCtx.moveTo(xPix, yPix);
+          continue;
+        }
+      }
+      if (!started) { atomCtx.moveTo(xPix, yPix); started = true; }
+      else { atomCtx.lineTo(xPix, yPix); }
+    }
+    atomCtx.stroke();
+  }
+
+  // colour ranges
+  const vals = fieldValues(snap, colorBy);
+  let vmin = vals[0], vmax = vals[0];
+  for (let i = 1; i < vals.length; i++) { if (vals[i] < vmin) vmin = vals[i]; if (vals[i] > vmax) vmax = vals[i]; }
+  if (colorBy === 'stress') { const m = Math.max(Math.abs(vmin), Math.abs(vmax), 1e-12); vmin = -m; vmax = m; }
+  if (vmax - vmin < 1e-12) vmax = vmin + 1e-9;
+  const cmap = cmaps[colorBy];
+
+  // atom radius — make it roughly the equilibrium contact diameter
+  const radius = Math.max(3, scale * 0.42);
+
+  // atoms (flip y so positive y is up)
+  for (let i = 0; i < snap.N; i++) {
+    const tNorm = (vals[i] - vmin) / (vmax - vmin);
+    const x = offX + snap.pos[2 * i] * scale;
+    const y = offY + (Ly - snap.pos[2 * i + 1]) * scale;
+    atomCtx.fillStyle = cmap(tNorm);
+    atomCtx.strokeStyle = 'rgba(0,0,0,0.6)';
+    atomCtx.lineWidth = 0.6;
+    atomCtx.beginPath();
+    atomCtx.arc(x, y, radius, 0, 2 * Math.PI);
+    atomCtx.fill();
+    atomCtx.stroke();
+  }
+
+  // tracked-atom highlight rings
+  for (const atomIdx of state.trackedAtoms) {
+    const cidx = state.trackColorIdx.get(atomIdx) || 0;
+    const colour = TRACK_COLORS[cidx % TRACK_COLORS.length];
+    const x = offX + snap.pos[2 * atomIdx] * scale;
+    const y = offY + (Ly - snap.pos[2 * atomIdx + 1]) * scale;
+    atomCtx.strokeStyle = colour;
+    atomCtx.lineWidth = 2.5;
+    atomCtx.beginPath();
+    atomCtx.arc(x, y, radius + 3, 0, 2 * Math.PI);
+    atomCtx.stroke();
+  }
+
+  // colorbar on right
+  const cbarX = offX + scale * Lx + 8;
+  const cbarY = offY;
+  const cbarH = scale * Ly;
+  const steps = 64;
+  for (let k = 0; k < steps; k++) {
+    const t = k / (steps - 1);
+    atomCtx.fillStyle = cmap(t);
+    atomCtx.fillRect(cbarX, cbarY + (1 - t) * cbarH - cbarH / steps,
+                     cbarWidth, cbarH / steps + 1);
+  }
+  atomCtx.strokeStyle = '#999';
+  atomCtx.lineWidth = 1;
+  atomCtx.strokeRect(cbarX, cbarY, cbarWidth, cbarH);
+  atomCtx.fillStyle = '#333';
+  atomCtx.font = '11px ui-monospace,Menlo,monospace';
+  atomCtx.textAlign = 'left';
+  atomCtx.textBaseline = 'top';
+  atomCtx.fillText(vmax.toFixed(3), cbarX + cbarWidth + 4, cbarY - 2);
+  atomCtx.textBaseline = 'bottom';
+  atomCtx.fillText(vmin.toFixed(3), cbarX + cbarWidth + 4, cbarY + cbarH + 4);
+  atomCtx.save();
+  atomCtx.translate(cbarX + cbarWidth + 32, cbarY + cbarH / 2);
+  atomCtx.rotate(-Math.PI / 2);
+  atomCtx.textAlign = 'center';
+  atomCtx.textBaseline = 'middle';
+  atomCtx.font = '11px sans-serif';
+  atomCtx.fillStyle = '#444';
+  atomCtx.fillText(cmapLabels[colorBy], 0, 0);
+  atomCtx.restore();
+}
+
+function drawTimeSeries(ctx, canvasId, history, key, label, color, refLine) {
+  const canvas = $(canvasId);
+  const W = canvas._logicalW, H = canvas._logicalH;
+  ctx.clearRect(0, 0, W, H);
+  if (history.t.length < 2) return;
+
+  const window = Math.min(history.t.length, 200);
+  const i0 = history.t.length - window;
+  const ts = history.t.slice(i0);
+  const vs = history[key].slice(i0);
+
+  const m = { l: 44, r: 8, t: 14, b: 22 };
+  const pw = W - m.l - m.r;
+  const ph = H - m.t - m.b;
+
+  let vmin = Infinity, vmax = -Infinity;
+  for (let k = 0; k < vs.length; k++) {
+    if (vs[k] < vmin) vmin = vs[k];
+    if (vs[k] > vmax) vmax = vs[k];
+  }
+  if (refLine !== null && refLine !== undefined) {
+    if (refLine < vmin) vmin = refLine;
+    if (refLine > vmax) vmax = refLine;
+  }
+  if (vmax - vmin < 1e-12) vmax = vmin + 1e-6;
+  const pad = 0.06 * (vmax - vmin);
+  vmin -= pad; vmax += pad;
+  const tmin = ts[0], tmax = ts[ts.length - 1];
+
+  // axes
+  ctx.strokeStyle = '#bbb';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(m.l, m.t);
+  ctx.lineTo(m.l, m.t + ph);
+  ctx.lineTo(m.l + pw, m.t + ph);
+  ctx.stroke();
+
+  // reference line
+  if (refLine !== null && refLine !== undefined) {
+    const y = m.t + ph - (refLine - vmin) / (vmax - vmin) * ph;
+    ctx.strokeStyle = '#bbb';
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(m.l, y);
+    ctx.lineTo(m.l + pw, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // data line
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  for (let k = 0; k < ts.length; k++) {
+    const x = m.l + (ts[k] - tmin) / Math.max(tmax - tmin, 1e-12) * pw;
+    const y = m.t + ph - (vs[k] - vmin) / (vmax - vmin) * ph;
+    if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // text labels
+  ctx.fillStyle = '#333';
+  ctx.font = 'bold 11px sans-serif';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText(label, m.l + 4, 2);
+  ctx.textAlign = 'right';
+  ctx.font = '11px ui-monospace,Menlo,monospace';
+  ctx.fillText(vs[vs.length - 1].toFixed(4), W - m.r - 2, 2);
+
+  ctx.fillStyle = '#888';
+  ctx.font = '9.5px ui-monospace,Menlo,monospace';
+  ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+  ctx.fillText(vmax.toFixed(3), m.l - 4, m.t - 3);
+  ctx.textBaseline = 'bottom';
+  ctx.fillText(vmin.toFixed(3), m.l - 4, m.t + ph + 4);
+  ctx.textAlign = 'center';
+  ctx.fillText('time', m.l + pw / 2, H - 2);
+}
+
+function drawRDFPlot(ctx, canvasId, g, dr, nFrames) {
+  const canvas = $(canvasId);
+  const W = canvas._logicalW, H = canvas._logicalH;
+  ctx.clearRect(0, 0, W, H);
+  if (g.length < 2) return;
+
+  const m = { l: 44, r: 8, t: 14, b: 22 };
+  const pw = W - m.l - m.r;
+  const ph = H - m.t - m.b;
+
+  // r-axis 0..rmax; g-axis 0..max(g, 1.2) so the g=1 reference is always visible
+  const rmax = g.length * dr;
+  let gmax = 1.2;
+  for (let k = 0; k < g.length; k++) if (g[k] > gmax) gmax = g[k];
+  gmax *= 1.05;
+
+  // axes
+  ctx.strokeStyle = '#bbb';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(m.l, m.t);
+  ctx.lineTo(m.l, m.t + ph);
+  ctx.lineTo(m.l + pw, m.t + ph);
+  ctx.stroke();
+
+  // g = 1 reference (ideal-gas asymptote)
+  const yOne = m.t + ph - (1 / gmax) * ph;
+  ctx.strokeStyle = '#bbb';
+  ctx.setLineDash([4, 3]);
+  ctx.beginPath();
+  ctx.moveTo(m.l, yOne);
+  ctx.lineTo(m.l + pw, yOne);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // g(r) curve
+  ctx.strokeStyle = '#e377c2';
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  for (let k = 0; k < g.length; k++) {
+    const r = (k + 0.5) * dr;
+    const x = m.l + (r / rmax) * pw;
+    const y = m.t + ph - Math.min(g[k], gmax) / gmax * ph;
+    if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // labels
+  ctx.fillStyle = '#333';
+  ctx.font = 'bold 11px sans-serif';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText('g(r)  (avg over ' + nFrames + ' frames)', m.l + 4, 2);
+
+  ctx.fillStyle = '#888';
+  ctx.font = '9.5px ui-monospace,Menlo,monospace';
+  ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+  ctx.fillText(gmax.toFixed(2), m.l - 4, m.t - 3);
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('0', m.l - 4, m.t + ph + 4);
+  ctx.textBaseline = 'top';
+  ctx.textAlign = 'center';
+  ctx.fillText('r', m.l + pw / 2, m.t + ph + 6);
+  ctx.textAlign = 'right';
+  ctx.fillText(rmax.toFixed(2), m.l + pw, m.t + ph + 6);
+  ctx.textAlign = 'left';
+  ctx.fillText('0', m.l, m.t + ph + 6);
+}
+
+// ---------- readout ----------
+function updateReadout(snap, p) {
+  if (!snap) { $('readout').textContent = ''; return; }
+  const rho = snap.N / (snap.Lbox[0] * snap.Lbox[1]);
+  $('readout').innerHTML =
+    `<span>step <b>${snap.step}</b></span> &nbsp;` +
+    `<span>t = <b>${snap.time.toFixed(2)}</b></span> &nbsp;` +
+    `<span>T = <b>${snap.T.toFixed(4)}</b></span> &nbsp;` +
+    `<span>E = <b>${snap.E.toFixed(3)}</b></span> &nbsp;` +
+    `<span>P = <b>${snap.P.toFixed(3)}</b></span> &nbsp;` +
+    `<span>&rho; = <b>${rho.toFixed(3)}</b></span> &nbsp;` +
+    `<span>L = <b>${snap.Lbox[0].toFixed(2)}&times;${snap.Lbox[1].toFixed(2)}</b></span> &nbsp;` +
+    `<span style="color:#666">[${p.potential}, bc=${p.bc}, N=${snap.N}, scale=${state.boxScaleApplied.toFixed(2)}, tracked=${state.trackedAtoms.size}]</span>`;
+}
+
+// ---------- MSD & RDF ----------
+function computeMSD(state) {
+  // <|r_i(t) - r_i(0)|^2> using the unwrapped trajectory (so PBC crossings don't reset it).
+  const N = state.N;
+  let s = 0;
+  for (let i = 0; i < N; i++) {
+    const dx = state.unwrappedPos[2 * i]     - state.refPos[2 * i];
+    const dy = state.unwrappedPos[2 * i + 1] - state.refPos[2 * i + 1];
+    s += dx * dx + dy * dy;
+  }
+  return s / N;
+}
+
+function accumulateRDF(state, p) {
+  // Bin pairwise distances; histogram is time-averaged across the run.
+  // (Each animation frame adds one snapshot's worth of pairs; g(r) smooths over time.)
+  const N = state.N;
+  const Lx = state.Lbox[0], Ly = state.Lbox[1];
+  const hist = state.rdfHist, dr = state.rdfDr, rmax = state.rdfRmax;
+  const periodic = (p.bc === 'periodic');
+  for (let i = 0; i < N; i++) {
+    const xi = state.pos[2 * i], yi = state.pos[2 * i + 1];
+    for (let j = i + 1; j < N; j++) {
+      let dx = xi - state.pos[2 * j];
+      let dy = yi - state.pos[2 * j + 1];
+      if (periodic) {
+        dx -= Lx * Math.round(dx / Lx);
+        dy -= Ly * Math.round(dy / Ly);
+      }
+      const r = Math.sqrt(dx * dx + dy * dy);
+      if (r < rmax) {
+        const k = (r / dr) | 0;
+        if (k < hist.length) hist[k] += 2;   // ×2 because each pair contributes to atom i and j
+      }
+    }
+  }
+  state.rdfFrames++;
+}
+
+function computeRDFCurve(state) {
+  // Normalize histogram to g(r). 2D shell area = 2π r dr.
+  const dr = state.rdfDr, hist = state.rdfHist;
+  const N = state.N;
+  const V = state.Lbox[0] * state.Lbox[1];
+  const rho = N / V;
+  const nF = Math.max(state.rdfFrames, 1);
+  const g = new Float64Array(hist.length);
+  for (let k = 0; k < hist.length; k++) {
+    const r = (k + 0.5) * dr;
+    const shell = 2 * Math.PI * r * dr;
+    g[k] = hist[k] / (nF * N * rho * shell);
+  }
+  return g;
+}
+
+// ---------- box scaling (live density control) ----------
+// Multiplies pos, unwrappedPos, refPos, Lbox uniformly. Recomputes forces at the
+// scaled positions and resets the RDF histogram (its bins refer to absolute
+// distances, which change under scaling). MSD continues -- discontinuity by ratio^2
+// in the plot is the physically-correct response to an affine rescaling.
+function applyBoxScale(state, p, newScale) {
+  const ratio = newScale / state.boxScaleApplied;
+  if (Math.abs(ratio - 1) < 1e-9) return;
+  for (let i = 0; i < 2 * state.N; i++) {
+    state.pos[i]          *= ratio;
+    state.unwrappedPos[i] *= ratio;
+    state.refPos[i]       *= ratio;
+  }
+  state.Lbox[0] *= ratio;
+  state.Lbox[1] *= ratio;
+  state.boxScaleApplied = newScale;
+
+  // recompute forces at the new positions
+  const r = (p.potential === 'Morse') ? computeForcesMorse(state, p)
+                                      : computeForcesEAM  (state, p);
+  state.F = r.F; state.pe_per = r.pe; state.vir_per = r.vir;
+
+  // RDF: clear histogram and resize for new rmax = L/2
+  state.rdfRmax = 0.5 * Math.min(state.Lbox[0], state.Lbox[1]);
+  const nBins = Math.max(8, Math.floor(state.rdfRmax / state.rdfDr));
+  state.rdfHist = new Float64Array(nBins);
+  state.rdfFrames = 0;
+}
+
+// ---------- atom-canvas pixel transform (used by drawAtoms & click handler) ----------
+function atomCanvasTransform(Lbox) {
+  const canvas = $('atomCanvas');
+  const W = canvas._logicalW, H = canvas._logicalH;
+  const margin = 24, cbarWidth = 20;
+  const plotW = W - 2 * margin - cbarWidth - 14;
+  const plotH = H - 2 * margin;
+  const scale = Math.min(plotW / Lbox[0], plotH / Lbox[1]);
+  const offX = margin + (plotW - scale * Lbox[0]) / 2;
+  const offY = margin + (plotH - scale * Lbox[1]) / 2;
+  return { offX, offY, scale, Ly: Lbox[1] };
+}
+
+// ---------- state ----------
+const TRACK_COLORS = ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3',
+                      '#ff7f00', '#a65628', '#f781bf', '#17becf'];
+
+const state = {
+  N: 0, pos: null, vel: null, F: null,
+  unwrappedPos: null, refPos: null,
+  pe_per: null, vir_per: null,
+  Lbox: [0, 0], mass: 1.0,
+  time: 0, step: 0,
+  running: false, replaying: false,
+  snapshots: [], maxSnapshots: 400,
+  _rescaleCount: 0,
+  rdfHist: null, rdfFrames: 0, rdfDr: 0.04, rdfRmax: 0,
+  boxScaleApplied: 1.0,
+  trackedAtoms: new Set(),            // atom indices being traced
+  trails: new Map(),                  // atomIdx -> Array of [x, y] (wrapped positions)
+  trackColorIdx: new Map(),           // atomIdx -> palette index (stable colour per atom)
+  maxTrailLen: 400
+};
+const history = { t: [], T: [], E: [], P: [], MSD: [] };
+
+// ---------- (re)build simulation ----------
+function rebuildSim() {
+  const p = readParams();
+  const rng = mulberry32(p.seed);
+  const lat = makeLattice(p.nx, p.ny, p.a_lat);
+  state.N = lat.N;
+  state.pos = lat.pos;
+  state.Lbox = lat.Lbox;
+  state.vel = initVelocities(state.N, p.T_init, state.mass, rng);
+  state.time = 0;
+  state.step = 0;
+  state._rescaleCount = 0;
+  state.snapshots = [];
+
+  // MSD bookkeeping: take current positions as the reference
+  state.unwrappedPos = state.pos.slice();
+  state.refPos       = state.pos.slice();
+
+  // RDF bookkeeping: histogram out to half the smaller box dimension (PBC convention)
+  state.rdfRmax  = 0.5 * Math.min(state.Lbox[0], state.Lbox[1]);
+  state.rdfDr    = 0.04;
+  const nBins    = Math.max(8, Math.floor(state.rdfRmax / state.rdfDr));
+  state.rdfHist  = new Float64Array(nBins);
+  state.rdfFrames = 0;
+
+  // tracking is cleared on Reset (atom indices reset to a fresh lattice)
+  state.trackedAtoms.clear();
+  state.trails.clear();
+  state.trackColorIdx.clear();
+
+  history.t.length = 0; history.T.length = 0; history.E.length = 0;
+  history.P.length = 0; history.MSD.length = 0;
+
+  const r = (p.potential === 'Morse') ? computeForcesMorse(state, p)
+                                      : computeForcesEAM  (state, p);
+  state.F       = r.F;
+  state.pe_per  = r.pe;
+  state.vir_per = r.vir;
+
+  // Apply the current box_scale slider value to the freshly-built lattice
+  state.boxScaleApplied = 1.0;
+  if (p.box_scale !== 1.0) applyBoxScale(state, p, p.box_scale);
+
+  const snap = snapshot(state);
+  state.snapshots.push(snap);
+  history.t.push(snap.time); history.T.push(snap.T);
+  history.E.push(snap.E);    history.P.push(snap.P);
+  history.MSD.push(0);
+
+  drawAtoms(snap, p.colorBy);
+  drawTimeSeries(tempCtx,     'tempPlot',     history, 'T',  'T',     '#1f77b4', p.thermostat !== 'none' ? p.T_target : null);
+  drawTimeSeries(energyCtx,   'energyPlot',   history, 'E',  'E total','#ff7f0e', null);
+  drawTimeSeries(pressureCtx, 'pressurePlot', history, 'P',  'P',     '#2ca02c', null);
+  drawTimeSeries(msdCtx,      'msdPlot',      history, 'MSD','MSD',   '#9467bd', null);
+  drawRDFPlot(rdfCtx, 'rdfPlot', computeRDFCurve(state), state.rdfDr, state.rdfFrames);
+  updateReadout(snap, p);
+}
+
+// ---------- main animation loop ----------
+function tick() {
+  if (!state.running) return;
+  const p = readParams();
+
+  // Live density: apply any change in the box_scale slider before stepping.
+  if (p.box_scale !== state.boxScaleApplied) {
+    applyBoxScale(state, p, p.box_scale);
+  }
+
+  const spf = p.spf;
+  for (let i = 0; i < spf; i++) step(state, p);
+
+  // accumulate RDF once per animation frame (fine-grained enough for smoothing)
+  accumulateRDF(state, p);
+
+  // update trails for tracked atoms (store wrapped pos; drawAtoms handles PBC breaks)
+  for (const atomIdx of state.trackedAtoms) {
+    const trail = state.trails.get(atomIdx);
+    if (!trail) continue;
+    trail.push([state.pos[2 * atomIdx], state.pos[2 * atomIdx + 1]]);
+    if (trail.length > state.maxTrailLen) trail.shift();
+  }
+
+  const snap = snapshot(state);
+  const msd = computeMSD(state);
+  state.snapshots.push(snap);
+  if (state.snapshots.length > state.maxSnapshots) state.snapshots.shift();
+
+  history.t.push(snap.time); history.T.push(snap.T);
+  history.E.push(snap.E);    history.P.push(snap.P);
+  history.MSD.push(msd);
+  if (history.t.length > state.maxSnapshots) {
+    history.t.shift();   history.T.shift();
+    history.E.shift();   history.P.shift();
+    history.MSD.shift();
+  }
+
+  drawAtoms(snap, p.colorBy);
+  drawTimeSeries(tempCtx,     'tempPlot',     history, 'T',  'T',     '#1f77b4', p.thermostat !== 'none' ? p.T_target : null);
+  drawTimeSeries(energyCtx,   'energyPlot',   history, 'E',  'E total','#ff7f0e', null);
+  drawTimeSeries(pressureCtx, 'pressurePlot', history, 'P',  'P',     '#2ca02c', null);
+  drawTimeSeries(msdCtx,      'msdPlot',      history, 'MSD','MSD',   '#9467bd', null);
+  drawRDFPlot(rdfCtx, 'rdfPlot', computeRDFCurve(state), state.rdfDr, state.rdfFrames);
+  updateReadout(snap, p);
+  requestAnimationFrame(tick);
+}
+
+// ---------- buttons ----------
+function setStatus(text, color) {
+  const el = $('statusText');
+  el.textContent = text;
+  el.style.color = color;
+}
+
+$('start').onclick = () => {
+  if (state.running) return;
+  state.replaying = false;
+  state.running = true;
+  setStatus('running', '#28a745');
+  requestAnimationFrame(tick);
+};
+$('stop').onclick = () => {
+  state.running = false;
+  state.replaying = false;
+  setStatus('stopped', '#d39e00');
+};
+$('reset').onclick = () => {
+  state.running = false;
+  state.replaying = false;
+  rebuildSim();
+  setStatus('reset — system rebuilt', '#666');
+};
+$('replay').onclick = () => {
+  if (state.running || state.replaying || state.snapshots.length < 2) return;
+  state.replaying = true;
+  setStatus('replaying', '#17a2b8');
+  const snaps = state.snapshots.slice();
+  let i = 0;
+  function frame() {
+    if (!state.replaying || i >= snaps.length) {
+      state.replaying = false;
+      setStatus('replay done', '#666');
+      return;
+    }
+    const p = readParams();
+    drawAtoms(snaps[i], p.colorBy);
+    updateReadout(snaps[i], p);
+    i++;
+    requestAnimationFrame(frame);
+  }
+  frame();
+};
+
+$('clear_traces').onclick = () => {
+  state.trackedAtoms.clear();
+  state.trails.clear();
+  state.trackColorIdx.clear();
+  // Force a redraw so the rings/lines disappear immediately
+  const p = readParams();
+  drawAtoms(snapshot(state), p.colorBy);
+};
+
+// ---------- live box_scale (also works when paused) ----------
+$('box_scale').addEventListener('input', () => {
+  const p = readParams();
+  if (p.box_scale !== state.boxScaleApplied) {
+    applyBoxScale(state, p, p.box_scale);
+    // If the sim isn't running, the tick won't redraw -- do it ourselves.
+    if (!state.running) {
+      const snap = snapshot(state);
+      drawAtoms(snap, p.colorBy);
+      drawRDFPlot(rdfCtx, 'rdfPlot', computeRDFCurve(state), state.rdfDr, state.rdfFrames);
+      updateReadout(snap, p);
+    }
+  }
+});
+
+// ---------- atom picking (click to track) ----------
+$('atomCanvas').addEventListener('click', (e) => {
+  if (!state.pos) return;
+  const rect = $('atomCanvas').getBoundingClientRect();
+  const cssX = e.clientX - rect.left;
+  const cssY = e.clientY - rect.top;
+  const t = atomCanvasTransform(state.Lbox);
+  const xSim = (cssX - t.offX) / t.scale;
+  const ySim = t.Ly - (cssY - t.offY) / t.scale;
+  // find nearest atom (just in displayed/wrapped coords)
+  let bestI = -1, bestD2 = Infinity;
+  for (let i = 0; i < state.N; i++) {
+    const dx = state.pos[2 * i]     - xSim;
+    const dy = state.pos[2 * i + 1] - ySim;
+    const d2 = dx * dx + dy * dy;
+    if (d2 < bestD2) { bestD2 = d2; bestI = i; }
+  }
+  // require click within ~half an atom radius (in sim units, roughly 0.5)
+  if (bestI < 0 || bestD2 > 0.45 * 0.45) return;
+  if (state.trackedAtoms.has(bestI)) {
+    state.trackedAtoms.delete(bestI);
+    state.trails.delete(bestI);
+    state.trackColorIdx.delete(bestI);
+  } else {
+    state.trackedAtoms.add(bestI);
+    state.trails.set(bestI, [[state.pos[2 * bestI], state.pos[2 * bestI + 1]]]);
+    // assign next palette colour
+    state.trackColorIdx.set(bestI, state.trackColorIdx.size);
+  }
+  // immediate redraw so the user sees the highlight on click
+  const p = readParams();
+  drawAtoms(snapshot(state), p.colorBy);
+});
+
+// hover cursor: pointer when over an atom
+$('atomCanvas').addEventListener('mousemove', (e) => {
+  if (!state.pos) return;
+  const rect = $('atomCanvas').getBoundingClientRect();
+  const cssX = e.clientX - rect.left;
+  const cssY = e.clientY - rect.top;
+  const t = atomCanvasTransform(state.Lbox);
+  const xSim = (cssX - t.offX) / t.scale;
+  const ySim = t.Ly - (cssY - t.offY) / t.scale;
+  let bestD2 = Infinity;
+  for (let i = 0; i < state.N; i++) {
+    const dx = state.pos[2 * i]     - xSim;
+    const dy = state.pos[2 * i + 1] - ySim;
+    const d2 = dx * dx + dy * dy;
+    if (d2 < bestD2) bestD2 = d2;
+  }
+  $('atomCanvas').style.cursor = (bestD2 < 0.45 * 0.45) ? 'pointer' : 'default';
+});
+
+// ---------- bootstrap ----------
+rebuildSim();
+setStatus('ready', '#666');
+</script>
+
+</body>
+</html>
