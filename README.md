@@ -1,7 +1,7 @@
 # Molecular Dynamics Modules
 
 Interactive, from-scratch teaching tools for **molecular dynamics**. This
-repository contains two self-contained modules:
+repository contains four self-contained modules:
 
 - **2D MD — Morse & EAM** (`Molecular Dynamics.ipynb` + `Molecular Dynamics.html`):
   pairwise and many-body potentials, velocity Verlet, virial stress, and a live
@@ -11,6 +11,17 @@ repository contains two self-contained modules:
   draw any pair potential, train a small neural network to imitate it
   (Adam / AdamW), and run it live in 3D.
   [![Open MLIP in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/lamm-mit/MolecularDynamicsModules/blob/main/Molecular%20Dynamics%20MLIP.ipynb)
+- **2D Fracture & Mechanics** (`Fracture and Mechanics.ipynb`): pull a triangular
+  lattice with an edge pre-crack to failure in Mode I / II and watch the crack
+  run, with a live stress–strain curve.
+  [![Open Fracture in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/lamm-mit/MolecularDynamicsModules/blob/main/Fracture%20and%20Mechanics.ipynb)
+- **Phonons** (`Phonons.ipynb`): build the dynamical matrix from any potential,
+  plot the phonon dispersion, and animate the eigenmodes — Morse vs. MLIP.
+  [![Open Phonons in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/lamm-mit/MolecularDynamicsModules/blob/main/Phonons.ipynb)
+
+The Fracture and Phonons modules can use the **same trained MLIP** (a default fit
+is bundled; paste your own weights from the MLIP notebook) — train a potential
+once, then *use* it for mechanics and vibrations.
 
 ---
 
@@ -219,12 +230,60 @@ required.
 
 ---
 
+## Module 3 — 2D Fracture & Mechanics
+
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/lamm-mit/MolecularDynamicsModules/blob/main/Fracture%20and%20Mechanics.ipynb)
+
+**`Fracture and Mechanics.ipynb`** loads a 2D triangular lattice with a sharp
+**edge pre-crack** until it breaks — all in a real-time `<iframe srcdoc=…>` panel.
+
+- **Loading**: **Mode I** (tension) or **Mode II** (shear) via grips pulled at a
+  constant strain rate. Every atom is seeded with the matching **affine velocity
+  field** so the strain is uniform and continuous from the first step (and it
+  persists under NVE because uniform strain is a zero-net-force flow).
+- **Controls**: specimen size (`nx, ny`), **crack length**, potential
+  (**Morse** / **Lennard-Jones** / **MLIP**), Morse `a` (brittleness), temperature.
+- **Colour by** potential energy, **virial stress**, coordination, kinetic energy,
+  or speed; **scroll to zoom, drag to pan** the slab.
+- **Large systems**: a linked-cell neighbour list makes the cost scale linearly,
+  so `nx, ny` go up to 2048/side (total clamped to 40 000 for browser real-time;
+  use offline MD such as LAMMPS for millions).
+- **Emergent fracture**: there is no bond-breaking rule — bonds carry load through
+  the pair potential and snap once pulled past the force peak, so the crack
+  nucleates and runs from physics alone. A live **stress–strain** curve shows the
+  elastic rise, the peak, and the drop as the crack propagates.
+
+Verified in NumPy: forces equal $-\partial E/\partial\mathbf{x}$, Newton's third law,
+NVE energy conservation, and progressive cross-plane bond breaking under load.
+
+---
+
+## Module 4 — Phonons
+
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/lamm-mit/MolecularDynamicsModules/blob/main/Phonons.ipynb)
+
+**`Phonons.ipynb`** computes lattice vibrations directly from a pair potential.
+
+- **1D chain**: dynamical matrix vs. the textbook
+  $\omega(k)=2\sqrt{K/m}\,|\sin(k a_0/2)|$ as a method check.
+- **2D triangular lattice**: the $2\times2$ dynamical matrix $\mathbf D(\mathbf k)$,
+  acoustic branches along $\Gamma\!-\!M\!-\!K\!-\!\Gamma$, with the acoustic sum rule
+  ($\omega(\Gamma)=0$) satisfied exactly.
+- **Morse vs. MLIP**: overlays both dispersions — a stringent test of the learned
+  potential, since phonons probe the **curvature** $V''(r)$, not just the energy.
+- **Interactive eigenmode animation**: pick a wavevector and branch and watch the
+  atoms oscillate in that phonon, with the dispersion plotted and your $k$ marked.
+
+---
+
 ## Files
 
 ```
 Molecular Dynamics.ipynb       2D MD (Morse/EAM): physics derivation + embedded simulator
 Molecular Dynamics.html        2D standalone live simulator (~45 KB, no dependencies)
 Molecular Dynamics MLIP.ipynb  3D MD with a trainable neural-network potential (MLIP)
+Fracture and Mechanics.ipynb   2D fracture: edge crack, Mode I/II loading, live stress-strain
+Phonons.ipynb                  Phonon dispersion + eigenmode animation (Morse vs MLIP)
 README.md                      This file
 ```
 
