@@ -97,11 +97,11 @@
 
   <fieldset>
     <legend>EAM parameters (live)</legend>
-    <div class="slider-row"><label>A</label><input type="range" id="A" min="0.2" max="10.0" step="0.1" value="2.0"><span class="value" data-fmt="2">2.00</span></div>
-    <div class="slider-row"><label>alpha</label><input type="range" id="alpha" min="1.0" max="8.0" step="0.1" value="3.0"><span class="value" data-fmt="2">3.00</span></div>
+    <div class="slider-row"><label>A</label><input type="range" id="A" min="0.2" max="25.0" step="0.1" value="15.0"><span class="value" data-fmt="2">15.00</span></div>
+    <div class="slider-row"><label>alpha</label><input type="range" id="alpha" min="1.0" max="8.0" step="0.1" value="4.0"><span class="value" data-fmt="2">4.00</span></div>
     <div class="slider-row"><label>B</label><input type="range" id="B" min="0.1" max="3.0" step="0.05" value="0.5"><span class="value" data-fmt="2">0.50</span></div>
-    <div class="slider-row"><label>beta</label><input type="range" id="beta" min="1.0" max="8.0" step="0.1" value="3.0"><span class="value" data-fmt="2">3.00</span></div>
-    <div class="slider-row"><label>C</label><input type="range" id="C" min="0.1" max="5.0" step="0.05" value="1.5"><span class="value" data-fmt="2">1.50</span></div>
+    <div class="slider-row"><label>beta</label><input type="range" id="beta" min="1.0" max="8.0" step="0.1" value="2.0"><span class="value" data-fmt="2">2.00</span></div>
+    <div class="slider-row"><label>C</label><input type="range" id="C" min="0.1" max="10.0" step="0.1" value="5.0"><span class="value" data-fmt="2">5.00</span></div>
   </fieldset>
 
   <fieldset>
@@ -116,7 +116,7 @@
 </div>
 
 <div id="viewport">
-  <canvas id="atomCanvas" width="640" height="640"></canvas>
+  <canvas id="atomCanvas" width="720" height="640"></canvas>
   <div id="plots">
     <canvas id="tempPlot"     width="380" height="118"></canvas>
     <canvas id="energyPlot"   width="380" height="118"></canvas>
@@ -502,7 +502,7 @@ function drawAtoms(snap, colorBy) {
   const Lx = snap.Lbox[0], Ly = snap.Lbox[1];
   const cbarWidth = 20;
   const t = atomCanvasTransform(snap.Lbox);
-  const { offX, offY, scale } = t;
+  const { offX, offY, scale, margin } = t;
 
   // box border
   atomCtx.strokeStyle = '#bbb';
@@ -547,8 +547,9 @@ function drawAtoms(snap, colorBy) {
   if (vmax - vmin < 1e-12) vmax = vmin + 1e-9;
   const cmap = cmaps[colorBy];
 
-  // atom radius — make it roughly the equilibrium contact diameter
-  const radius = Math.max(3, scale * 0.42);
+  // Atom radius: roughly the equilibrium contact diameter, but never larger
+  // than the canvas margin so atoms at the box edge don't clip.
+  const radius = Math.max(3, Math.min(scale * 0.42, margin - 4));
 
   // atoms (flip y so positive y is up)
   for (let i = 0; i < snap.N; i++) {
@@ -860,13 +861,17 @@ function applyBoxScale(state, p, newScale) {
 function atomCanvasTransform(Lbox) {
   const canvas = $('atomCanvas');
   const W = canvas._logicalW, H = canvas._logicalH;
-  const margin = 24, cbarWidth = 20;
-  const plotW = W - 2 * margin - cbarWidth - 14;
+  // margin must exceed the rendered atom radius so atoms sitting on the box
+  // border (sim_x = 0 or sim_x = Lx) don't clip against the canvas edge.
+  const margin = 32, cbarWidth = 20;
+  // Reserve room on the right for colorbar (20) + tick labels (~30) + rotated axis label (~22)
+  const cbarReserve = cbarWidth + 52;
+  const plotW = W - 2 * margin - cbarReserve;
   const plotH = H - 2 * margin;
   const scale = Math.min(plotW / Lbox[0], plotH / Lbox[1]);
   const offX = margin + (plotW - scale * Lbox[0]) / 2;
   const offY = margin + (plotH - scale * Lbox[1]) / 2;
-  return { offX, offY, scale, Ly: Lbox[1] };
+  return { offX, offY, scale, Ly: Lbox[1], margin };
 }
 
 // ---------- state ----------
