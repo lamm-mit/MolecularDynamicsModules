@@ -1,4 +1,20 @@
-# 2D Molecular Dynamics — Morse and EAM
+# Molecular Dynamics Modules
+
+Interactive, from-scratch teaching tools for **molecular dynamics**. This
+repository contains two self-contained modules:
+
+- **2D MD — Morse & EAM** (`Molecular Dynamics.ipynb` + `Molecular Dynamics.html`):
+  pairwise and many-body potentials, velocity Verlet, virial stress, and a live
+  in-browser simulator.
+  [![Open 2D MD in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/lamm-mit/MolecularDynamicsModules/blob/main/Molecular%20Dynamics.ipynb)
+- **3D MD with a learned potential (MLIP)** (`Molecular Dynamics MLIP.ipynb`):
+  draw any pair potential, train a small neural network to imitate it
+  (Adam / AdamW), and run it live in 3D.
+  [![Open MLIP in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/lamm-mit/MolecularDynamicsModules/blob/main/Molecular%20Dynamics%20MLIP.ipynb)
+
+---
+
+## Module 1 — 2D Molecular Dynamics (Morse & EAM)
 
 An interactive teaching tool for **2D molecular dynamics** with two interatomic
 potentials (Morse and Embedded-Atom Method), built from scratch.
@@ -146,12 +162,69 @@ opened standalone or inside the notebook.
 
 ---
 
+## Module 2 — 3D MD with a learned interatomic potential (MLIP)
+
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/lamm-mit/MolecularDynamicsModules/blob/main/Molecular%20Dynamics%20MLIP.ipynb)
+
+**`Molecular Dynamics MLIP.ipynb`** is a self-contained, pedagogical notebook that
+trains a small **machine-learned interatomic potential (MLIP)** — a neural network —
+and uses it to drive a live **3D** molecular-dynamics simulation. You choose the
+target physics, train the network to imitate it, then watch the trained potential
+run a crystal in real time.
+
+### Pick the potential to learn
+
+- **Morse** — the analytic Morse pair potential with adjustable $D_e$, $a$, $r_e$.
+- **Draw your own** — sketch *any* $V(r)$ freehand with the mouse on a canvas
+  (`ipycanvas`), then smooth it.
+- **Upload CSV** — load a custom $V(r)$ from a two-column `r, V` file.
+
+### The neural network
+
+A one-hidden-layer tanh MLP,
+$V_\theta(r) = \big[\,b + \sum_j c_j \tanh(w_j r + b_j)\,\big]\,f_c(r)$, applied per
+pair so the total energy is $E = \sum_{i<j} V_\theta(r_{ij})$ and the forces are its
+analytic derivative (always consistent with the energy). Train it with:
+
+- **Adam / AdamW** — full neural-network training in **PyTorch** with autograd (the
+  $dV/dr$ force term uses double-backprop); watch the loss fall over epochs.
+- **CG (fast)** — freezes the hidden layer and solves the (then linear) output layer
+  exactly, as a crisp reference fit.
+
+You control the optimizer, learning rate, epochs, number of datapoints, hidden
+width, and regularization. The diagnostics plot the training **loss vs. epoch**, the
+**trained-vs-target $V(r)$**, and a **force-parity** scatter.
+
+### Live 3D simulator
+
+The final cell embeds a standalone HTML/JavaScript panel (`<iframe srcdoc=…>`) that
+runs the MD loop in the browser:
+
+- **FCC lattice** — the stable close-packed ground state (a simple-cubic lattice has
+  no shear stiffness and "melts" even at very low $T$); the cell size auto-fits to
+  the potential's zero-pressure spacing.
+- Potentials: **Morse**, **Custom** (your drawn/target curve), or the trained
+  **MLIP**.
+- **Periodic** or **reflecting-wall** boundary conditions, three thermostats, live
+  temperature/energy plots, and drag-to-rotate 3D rendering.
+
+### Requirements
+
+`numpy`, `scipy`, `matplotlib`, `ipywidgets`, `ipycanvas`, and `torch` (for the
+Adam / AdamW training). Launch it in Colab with the badge above — no local install
+required.
+
+> Markus J. Buehler, MIT
+
+---
+
 ## Files
 
 ```
-Molecular Dynamics.ipynb     Jupyter notebook: physics derivation + embedded simulator
-Molecular Dynamics.html      Standalone live simulator (~45 KB, no dependencies)
-README.md                    This file
+Molecular Dynamics.ipynb       2D MD (Morse/EAM): physics derivation + embedded simulator
+Molecular Dynamics.html        2D standalone live simulator (~45 KB, no dependencies)
+Molecular Dynamics MLIP.ipynb  3D MD with a trainable neural-network potential (MLIP)
+README.md                      This file
 ```
 
 ---
