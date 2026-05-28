@@ -18,6 +18,13 @@ for the HTML — open the file in any browser and it works offline.
 
 > Markus J. Buehler, MIT
 
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/lamm-mit/MolecularDynamicsModules/blob/main/Molecular%20Dynamics.ipynb)
+
+Click the badge to launch the notebook in Google Colab — no local install
+required. The live HTML simulator is auto-fetched from this repository on
+first run, so the embedded panel in § 5 works in Colab the same way as
+locally.
+
 ---
 
 ## Quick start
