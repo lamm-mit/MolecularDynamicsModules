@@ -192,8 +192,4 @@ movie or fallback, stress-strain plot, CSV, JSON run metrics, and README.
 ## Notes
 
 This is a simple fracture model for qualitative mechanism exploration and
-artifact generation, not a calibrated predictor of a specific material. Runs
-with fewer than 10000 steps are useful only for code smoke tests; do not present
-them as final fracture results because the crack may not propagate visibly.
-If the shell tool times out after partial frames, rerun the same physics with
-`--frames 16 --dpi 90`; do not reduce `--steps` below 10000 for the final run.
+artifact generation.
